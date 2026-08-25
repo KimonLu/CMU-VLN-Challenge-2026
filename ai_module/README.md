@@ -14,8 +14,19 @@ docker compose -f compose.yml up --build -d      # or compose_gpu.yml
 ```
 
 The image (`ai_module/docker/Dockerfile`) bakes in all Python dependencies,
-CPU PyTorch, and YOLO-World + CLIP weights (no network needed at inference
-time except for the LLM API). Both `dummy_vlm` and `smart_vlm` are built.
+PyTorch, and YOLO-World + CLIP weights (no network needed at inference time
+except for the LLM API). Both `dummy_vlm` and `smart_vlm` are built.
+
+The validated competition image is also published on Docker Hub:
+
+```bash
+docker pull kimon0810/iros2026_ai_module:20260825-1715673
+# Immutable reference:
+docker pull kimon0810/iros2026_ai_module@sha256:499c717a0812c8c0348fb64ca18b786e889ecd0b5f8cbbb7c7b369cd2403614b
+```
+
+`latest` currently resolves to the same digest. The published platform is
+`linux/amd64`; CUDA inference was validated with an NVIDIA GPU.
 
 ## Run
 
@@ -34,6 +45,6 @@ API keys and all tunables live in `ai_module/src/smart_vlm/config/params.yaml`.
 ## Layout
 
 - `src/smart_vlm/` — ROS 2 ament_python package (see its README for the
-  module map); `src/smart_vlm/tests/` — 128 pytest cases, runnable without ROS
+  module map); `src/smart_vlm/tests/` — 144 pytest cases, runnable without ROS
 - `src/dummy_vlm/` — original dummy model, kept for reference/fallback
 - `tools/` — development-only calibration and regression-evaluation scripts
