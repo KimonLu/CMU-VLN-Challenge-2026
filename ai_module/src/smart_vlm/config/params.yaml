@@ -10,24 +10,24 @@ llm:
     # 提交前评估:此 key 绑定个人校园账号,仓库公开后校内他人可用,可视情况移除。
     - name: sjtu
       base_url: https://models.sjtu.edu.cn/api/v1
-      api_key: "REPLACE_ME_WITH_DEDICATED_COMPETITION_KEY"
+      api_key: "sk-0SY3euGAzBm92lBOL33DKw"
       text_model: deepseek-chat        # DeepSeek V4 Flash,免费
       vision_model: qwen3.6-27b        # 唯一多模态,免费,实测单图/多图均可
       # 10 req/min 超限=请求挂起 ~58s(非 429),会被 timeout 判成假超时 → 主动限速
       min_interval_s: 6.5
     - name: zhipu
       base_url: https://open.bigmodel.cn/api/paas/v4
-      api_key: "REPLACE_ME_WITH_DEDICATED_COMPETITION_KEY"
+      api_key: "92e5d4cfd3e24046a96aa2492f4c0865.YNdy5MMvGDgCfVDY"
       text_model: glm-4-flash          # 免费
       vision_model: glm-4v-flash       # 免费
     - name: siliconflow
       base_url: https://api.siliconflow.cn/v1
-      api_key: "REPLACE_ME_WITH_DEDICATED_COMPETITION_KEY"
+      api_key: "REPLACE_ME_SF_KEY"
       text_model: Qwen/Qwen2.5-7B-Instruct
       vision_model: Qwen/Qwen2.5-VL-7B-Instruct
     - name: gemini
       base_url: https://generativelanguage.googleapis.com/v1beta/openai/
-      api_key: "REPLACE_ME_WITH_DEDICATED_COMPETITION_KEY"
+      api_key: "REPLACE_ME_GEMINI_KEY"
       text_model: gemini-2.0-flash
       vision_model: gemini-2.0-flash
   timeout_s: 15
