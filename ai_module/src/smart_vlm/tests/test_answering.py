@@ -56,7 +56,7 @@ def test_normalize_rejects_bad_type():
 def test_parse_falls_back_on_garbage_llm(logger):
     p = QuestionParser(FakeLLM({'type': 'bogus'}), logger)
     out = p.parse('Go to the sofa and stop')
-    assert out['type'] == 'instruction_following'    # 正则回退
+    assert out['type'] == 'instruction_following'
     assert 'sofa' in out['target_nouns']
 
 
@@ -69,7 +69,7 @@ def test_regex_fallback_types(logger):
 
 
 def test_regex_fallback_matches_plural_nouns(logger):
-    """冒烟实测:兜底正则漏掉复数 → "chairs" 解析出空 count_subject。"""
+
     p = QuestionParser(FakeLLM(None), logger)
     out = p.parse('How many chairs are in the room?')
     assert out['count_subject'] == 'chair'
@@ -79,8 +79,8 @@ def test_regex_fallback_matches_plural_nouns(logger):
 
 
 def test_parse_type_forced_by_question_prefix(logger):
-    """SJTU 实测:deepseek 把 "Find the X on Y" 错判成 instruction_following;
-    比赛题面前缀固定 → 规则强制覆盖 type,槽位仍用 LLM 的。"""
+
+
     llm_out = {'type': 'instruction_following', 'target_nouns': ['vase'],
                'detection_vocab': ['vase'], 'count_subject': None,
                'color_filters': {},
@@ -89,7 +89,7 @@ def test_parse_type_forced_by_question_prefix(logger):
     p = QuestionParser(FakeLLM(llm_out), logger)
     out = p.parse('Find the vase on the coffee table.')
     assert out['type'] == 'object_reference'
-    assert out['constraints'][0]['anchors'] == ['coffee table']   # 槽位保留
+    assert out['constraints'][0]['anchors'] == ['coffee table']
 
 
 def test_parse_type_forced_numerical(logger):
@@ -139,7 +139,7 @@ def test_arbitrate_picks_llm_choice():
 
 
 def test_resolve_uses_nested_qualified_anchor():
-    """lamp on [nightstand with photo]：先用 photo 选 nightstand，再选其上的 lamp。"""
+
     objs = [
         mk(0, 'nightstand', (0, 0, 0.35), size=(1, 1, 0.7)),
         mk(1, 'nightstand', (4, 0, 0.35), size=(1, 1, 0.7)),
@@ -159,7 +159,7 @@ def test_resolve_uses_nested_qualified_anchor():
 
 
 def test_resolve_complex_closest_uses_support_then_final_anchor():
-    """bowl on table closest screen：承载过滤后按最终锚点全局 argmin。"""
+
     objs = [
         mk(0, 'table', (0, 0, 0.4), size=(2, 2, 0.8)),
         mk(1, 'bowl', (-0.5, 0, 0.9), size=(0.2, 0.2, 0.2)),
@@ -190,7 +190,7 @@ def test_answer_numerical_with_on_relation():
 
 
 def test_direct_visual_count_bypasses_detector_recall_limit():
-    """最佳全景 VLM 直接列举；即使 3D 物体库只检出 1 个也可回答 2。"""
+
     llm = FakeLLM({'items': [{'where': 'left'}, {'where': 'right'}]})
     ans, _ = make_answerer([mk(0, 'pillow', (0, 0, 0))], llm)
     ans.smap._remember_view(np.full((640, 1920, 3), 120, np.uint8), [])
@@ -212,8 +212,8 @@ def test_direct_visual_count_accepts_count_only_schema():
 
 
 def test_count_check_sends_single_montage_image():
-    """冒烟实测:智谱 glm-4v-flash 单请求只收一张图(错误码 1210),
-    复核必须把 N 张裁剪图拼成 1 张发送。"""
+
+
     objs = [mk(i, 'chair', (i, 0, 0)) for i in range(3)]
     for o in objs:
         o.best_crop = np.full((60, 50, 3), 128, dtype=np.uint8)
@@ -222,47 +222,47 @@ def test_count_check_sends_single_montage_image():
     parsed = {'type': 'numerical', 'count_subject': 'chair',
               'target_nouns': ['chair'], 'color_filters': {}, 'constraints': []}
     n = ans.answer_numerical('How many chairs are in the room?', parsed)
-    assert len(llm.images) == 1 and len(llm.images[0]) == 1   # 仅 1 张图
+    assert len(llm.images) == 1 and len(llm.images[0]) == 1
     img = llm.images[0][0]
-    assert img.shape[1] > 3 * 50                              # 确为横向拼图
-    assert n == 2                                             # id=1 被否决
-    assert '[0, 1, 2]' in llm.calls[0]                        # prompt ids 与发图一致
+    assert img.shape[1] > 3 * 50
+    assert n == 2
+    assert '[0, 1, 2]' in llm.calls[0]
 
 
 def test_count_check_uncropped_candidates_not_penalized():
-    """无裁剪图的候选没被 VLM 看过,不得因复核被扣数。"""
+
     objs = [mk(i, 'chair', (i, 0, 0)) for i in range(3)]
     objs[0].best_crop = np.full((60, 50, 3), 128, dtype=np.uint8)
     llm = FakeLLM({'valid_ids': [0]})
     ans, _ = make_answerer(objs, llm)
     parsed = {'type': 'numerical', 'count_subject': 'chair',
               'target_nouns': ['chair'], 'color_filters': {}, 'constraints': []}
-    # 3 个候选,只有 id=0 有图且被确认 → 未看过的 1、2 保留,答案 3
+
     assert ans.answer_numerical('How many chairs?', parsed) == 3
     assert '[0]' in llm.calls[0]
 
 
 def test_count_check_skips_tiny_crops():
-    """SJTU 实测:<48px 的裁剪放大后连人都认不出,VLM 保守否决造成误杀 →
-    过小的 crop 不送复核、不因复核扣数。"""
+
+
     objs = [mk(i, 'chair', (i, 0, 0)) for i in range(3)]
     objs[0].best_crop = np.full((60, 60, 3), 128, np.uint8)
-    objs[1].best_crop = np.full((20, 20, 3), 128, np.uint8)    # 过小
+    objs[1].best_crop = np.full((20, 20, 3), 128, np.uint8)
     objs[2].best_crop = np.full((60, 60, 3), 128, np.uint8)
     llm = FakeLLM({'valid_ids': [0]})
     ans, _ = make_answerer(objs, llm)
     parsed = {'type': 'numerical', 'count_subject': 'chair',
               'target_nouns': ['chair'], 'color_filters': {}, 'constraints': []}
     n = ans.answer_numerical('How many chairs?', parsed)
-    assert '[0, 2]' in llm.calls[0]               # id=1 未被送审
-    assert n == 2                                 # id=2 被否决;id=1 不受影响
+    assert '[0, 2]' in llm.calls[0]
+    assert n == 2
 
 
 def test_montage_mixed_sizes():
     from smart_vlm.answering import montage
     crops = [np.zeros((80, 50, 3), np.uint8), np.zeros((30, 120, 3), np.uint8)]
     img = montage(crops, [3, 7], tile_h=64)
-    assert img.ndim == 3 and img.shape[0] == 64 + 28          # 统一高度+标注条
+    assert img.ndim == 3 and img.shape[0] == 64 + 28
 
 
 # ---------- instruction following ----------
@@ -289,12 +289,12 @@ def test_plan_pass_between_two_anchors():
                                'relation': 'between'}]}
     wps, _ = ans.plan_instruction('q', parsed, (0.0, 0.0))
     assert any(np.linalg.norm(np.asarray(w) - [2, 0]) < 0.1 for w in wps)
-    assert len(wps) == 3                          # 入口/中点/出口
+    assert len(wps) == 3
 
 
 def test_plan_pass_between_then_reaches_target():
-    """SJTU 实测:deepseek 把最终目的地塞进 pass_between.target 且不给单独
-    goto → 穿过间隙后必须继续前往 target,否则永远到不了目的地。"""
+
+
     ans, _ = make_answerer([mk(0, 'column', (2, -1, 1)),
                             mk(1, 'column', (2, 1, 1)),
                             mk(2, 'plant', (6, 0, 0.3))])
@@ -308,7 +308,7 @@ def test_plan_pass_between_then_reaches_target():
 
 
 def test_plan_pass_between_single_anchor_degrades():
-    """P0 ⑥:anchors 只有 1 个时降级为 pass_near,不越界崩溃。"""
+
     ans, _ = make_answerer([mk(0, 'column', (2, 0, 1))])
     parsed = {**BASE_PARSED,
               'constraints': [{'action': 'pass_between', 'target': '',
@@ -328,7 +328,7 @@ def test_plan_pass_between_no_anchor_skipped():
 
 
 def test_plan_avoid_target_only():
-    """avoid 的对象在 target 而非 anchors 时也要生效。"""
+
     ans, _ = make_answerer([mk(0, 'rug', (1, 1, 0.05), size=(1.5, 1.0, 0.1))])
     parsed = {**BASE_PARSED,
               'constraints': [{'action': 'avoid', 'target': 'rug',
@@ -343,7 +343,7 @@ def test_plan_avoid_none_anchors_no_crash():
               'constraints': [{'action': 'avoid', 'target': '',
                                'anchors': None, 'relation': 'none'}]}
     wps, zones = ans.plan_instruction('q', parsed, (0.0, 0.0))
-    assert zones == []                            # 无可解析对象 → 无禁区,不崩
+    assert zones == []
 
 
 def test_plan_waypoint_step_param():
@@ -353,11 +353,11 @@ def test_plan_waypoint_step_param():
                                'anchors': [], 'relation': 'none'}]}
     wps_fine, _ = ans.plan_instruction('q', parsed, (0.0, 0.0), step=1.0)
     wps_coarse, _ = ans.plan_instruction('q', parsed, (0.0, 0.0), step=4.0)
-    assert len(wps_fine) > len(wps_coarse)        # P1 ⑨a:step 生效
+    assert len(wps_fine) > len(wps_coarse)
 
 
 def test_plan_densifies_only_final_constraint():
-    """q5 修复只改最后接近段，不改前序约束的航点节奏。"""
+
     objs = [mk(0, 'lamp', (4, 0, 1)), mk(1, 'plant', (10, 0, 0.3))]
     parsed = {**BASE_PARSED,
               'constraints': [
@@ -370,7 +370,7 @@ def test_plan_densifies_only_final_constraint():
     dense, _ = make_answerer(objs)[0].plan_instruction(
         'q', parsed, (0.0, 0.0), step=2.5,
         final_step=1.0, final_radius=3.0)
-    # 前一个目标和最后一段的粗前缀不变，只在终点前增加航点。
+
     assert np.allclose(dense[:3], coarse[:3])
     assert np.allclose(dense[-1], coarse[-1])
     assert len(dense) > len(coarse)
@@ -378,7 +378,7 @@ def test_plan_densifies_only_final_constraint():
 
 
 def test_plan_meta_keeps_pass_between_outside_final_retry_segment():
-    """柜体离 between 航点很近时，末段重规划也不得跳过入口/中点/出口。"""
+
     ans, _ = make_answerer([
         mk(0, 'lamp', (1, 0, 1)),
         mk(1, 'sofa', (2, -1, 0.5)),
@@ -397,7 +397,7 @@ def test_plan_meta_keeps_pass_between_outside_final_retry_segment():
         final_step=1.0, final_radius=3.0, return_meta=True)
     mid_idx = next(i for i, w in enumerate(wps)
                    if np.linalg.norm(np.asarray(w) - [2.0, 0.0]) < 0.1)
-    assert final_start > mid_idx + 1                 # 必须先执行 between 出口
+    assert final_start > mid_idx + 1
     assert final_start < len(wps)
 
 
@@ -431,7 +431,7 @@ def test_plan_single_point_astar_path_does_not_crash():
 
 
 def test_plan_final_astar_miss_uses_dense_local_waypoints():
-    """q5 密集家具区：A* 暂时无路也不得一步直冲终点。"""
+
     ans, _ = make_answerer([mk(0, 'cabinet', (5, 0, 0.5))])
     ans.gm.astar = lambda *args, **kwargs: None
     parsed = {**BASE_PARSED,
@@ -453,32 +453,28 @@ def test_answer_object_reference_returns_obj():
     assert ans.answer_object_reference('Find the vase', parsed).oid == 0
 
 
-# ---------- 2026-07-09 优化:relation-aware resolve + 探索早停 grounding + 安全回退 ----------
-# 背景:q5 停在原点附近(离真 cabinet 6.7m)。根因=①探索见到任一同名物体就早停
-# ②目标类别缺失时 resolve 抓全库随便一个当终点。下列用例锁定修复后的行为。
-
 def _cab_pic():
-    """cabinet0 上方有 picture(关联);cabinet1 在远处孤立(无关联 picture)。"""
-    cab0 = mk(0, 'cabinet', (0, 0, 0.5), size=(1.0, 0.5, 1.0))   # 顶=1.0
-    pic = mk(1, 'picture', (0, 0, 1.7), size=(0.6, 0.05, 0.4))   # 底=1.5,在其上方
+
+    cab0 = mk(0, 'cabinet', (0, 0, 0.5), size=(1.0, 0.5, 1.0))
+    pic = mk(1, 'picture', (0, 0, 1.7), size=(0.6, 0.05, 0.4))
     cab1 = mk(2, 'cabinet', (5, 5, 0.5), size=(1.0, 0.5, 1.0))
     return [cab0, pic, cab1]
 
 
 def test_resolve_relation_picks_associated_object():
-    """"the cabinet with a picture above it":用约束关系确定性收窄,不靠 LLM。"""
-    ans, llm = make_answerer(_cab_pic())         # FakeLLM(None):若误走 LLM 会拿到 None
+
+    ans, llm = make_answerer(_cab_pic())
     con = {'action': 'stop_at', 'target': 'cabinet',
            'anchors': ['picture'], 'relation': 'above'}
     parsed = {**BASE_PARSED, 'constraints': [con]}
     obj = ans.resolve('cabinet', parsed, constraint=con)
-    assert obj is not None and obj.oid == 0      # 选带 picture 的那个
-    assert llm.calls == []                       # 全程未调用 LLM
+    assert obj is not None and obj.oid == 0
+    assert llm.calls == []
 
 
 def test_resolve_wall_picture_offset_still_associates():
-    """墙上画与靠墙柜有 ~0.4m 水平偏移(q5 真实几何):above() 用尺寸判太紧会漏,
-    _stacked 水平容差应正确关联。"""
+
+
     cab = mk(0, 'cabinet', (-2.2, -6.4, 0.4), size=(0.5, 1.3, 0.7))
     pic = mk(1, 'picture', (-2.6, -6.6, 1.4), size=(0.1, 0.8, 0.7))
     decoy = mk(2, 'cabinet', (2.0, 0.0, 0.5), size=(0.5, 0.5, 1.0))
@@ -492,9 +488,9 @@ def test_resolve_wall_picture_offset_still_associates():
 
 
 def test_resolve_relation_anchor_beyond_first_three():
-    """真锚点排在多个干扰 picture 之后:anchor 不应被截断,否则漏配真柜(q5 根因)。"""
+
     objs = [mk(10 + i, 'picture', (-2.6, -1.0 - i, 1.5), size=(0.1, 0.4, 0.6))
-            for i in range(5)]                 # 5 个高处干扰 picture(不在任何柜上方)
+            for i in range(5)]
     cab = mk(0, 'cabinet', (3.0, 3.0, 0.4), size=(0.5, 1.0, 0.7))
     truepic = mk(1, 'picture', (3.1, 3.0, 1.4), size=(0.1, 0.8, 0.7))
     ans, llm = make_answerer(objs + [cab, truepic])
@@ -507,7 +503,7 @@ def test_resolve_relation_anchor_beyond_first_three():
 
 
 def test_resolve_relation_confidence_tiebreak():
-    """多个柜都满足"上方有画":按观测置信度 n_obs 择优,不掷给 LLM。"""
+
     cabA = mk(0, 'cabinet', (0, 0, 0.4), size=(0.5, 1.0, 0.7), n_obs=15)
     picA = mk(1, 'picture', (0.2, 0, 1.4), size=(0.1, 0.6, 0.7))
     cabB = mk(2, 'cabinet', (4, 0, 0.4), size=(0.5, 1.0, 0.7), n_obs=3)
@@ -517,26 +513,26 @@ def test_resolve_relation_confidence_tiebreak():
            'anchors': ['picture'], 'relation': 'above'}
     obj = ans.resolve('cabinet', {**BASE_PARSED, 'constraints': [con]},
                       constraint=con)
-    assert obj is not None and obj.oid == 0      # 见 15 次者胜
+    assert obj is not None and obj.oid == 0
     assert llm.calls == []
 
 
 def test_resolve_final_target_absent_returns_none():
-    """最终目标类别缺失 + fallback_any=False → 返回 None,不乱抓近处物。"""
+
     ans, _ = make_answerer([mk(0, 'sofa', (1, 0, 0.4)), mk(1, 'lamp', (2, 0, 1))])
     parsed = {**BASE_PARSED, 'constraints': []}
     assert ans.resolve('cabinet', parsed, fallback_any=False) is None
 
 
 def test_resolve_absent_default_still_best_effort():
-    """默认 fallback_any=True 保持旧行为(object_reference 依赖):仍返回某物。"""
+
     ans, _ = make_answerer([mk(0, 'sofa', (1, 0, 0.4))])
     parsed = {**BASE_PARSED, 'constraints': []}
     assert ans.resolve('cabinet', parsed) is not None
 
 
 def test_can_ground_requires_relation_satisfied():
-    """关系必须满足且候选观测稳定，才能触发探索早停。"""
+
     con = {'action': 'stop_at', 'target': 'cabinet',
            'anchors': ['picture'], 'relation': 'above'}
     parsed = {**BASE_PARSED, 'constraints': [con]}
@@ -545,14 +541,14 @@ def test_can_ground_requires_relation_satisfied():
     assert llm.calls == []
     low_conf = _cab_pic()
     ans2, _ = make_answerer(low_conf)
-    assert ans2.can_ground('cabinet', parsed, con) is False  # q5 误检初期
+    assert ans2.can_ground('cabinet', parsed, con) is False
     low_conf[0].n_obs = 6
     ans3, _ = make_answerer(low_conf)
     assert ans3.can_ground('cabinet', parsed, con) is True
 
 
 def test_can_ground_no_constraint_label_presence():
-    """无约束/关系时,类别存在即视为可 grounding。"""
+
     ans, _ = make_answerer([mk(0, 'lamp', (2, 0, 1))])
     parsed = {**BASE_PARSED, 'constraints': []}
     assert ans.can_ground('lamp', parsed) is True
@@ -560,7 +556,7 @@ def test_can_ground_no_constraint_label_presence():
 
 
 def test_plan_final_absent_no_bogus_far_waypoint():
-    """最终 stop_at 目标缺失时,终点停在已到达的中间物体附近,不被随机物拉走。"""
+
     ans, _ = make_answerer([mk(0, 'lamp', (2, 0, 1)), mk(1, 'sofa', (1, 3, 0.4))])
     parsed = {**BASE_PARSED,
               'constraints': [{'action': 'pass_near', 'target': 'lamp',
@@ -568,16 +564,16 @@ def test_plan_final_absent_no_bogus_far_waypoint():
                               {'action': 'stop_at', 'target': 'cabinet',
                                'anchors': [], 'relation': 'none'}]}
     wps, _ = ans.plan_instruction('q', parsed, (0.0, 0.0))
-    assert wps                                    # 到达了 lamp
+    assert wps
     assert np.linalg.norm(np.asarray(wps[-1]) - [2, 0]) < 1.5
 
 
 def test_plan_stop_at_relation_disambiguates_endpoint():
-    """两个 cabinet 时,终点指向"上方有 picture"的那个,而非孤立的。"""
+
     ans, llm = make_answerer(_cab_pic() + [mk(3, 'lamp', (1, 0, 1))])
     parsed = {**BASE_PARSED,
               'constraints': [{'action': 'stop_at', 'target': 'cabinet',
                                'anchors': ['picture'], 'relation': 'above'}]}
     wps, _ = ans.plan_instruction('q', parsed, (0.0, 0.0))
-    assert np.linalg.norm(np.asarray(wps[-1]) - [0, 0]) < 1.5   # 选 cabinet0
+    assert np.linalg.norm(np.asarray(wps[-1]) - [0, 0]) < 1.5
     assert llm.calls == []

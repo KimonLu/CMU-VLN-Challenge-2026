@@ -9,7 +9,7 @@ from smart_vlm.llm_client import LLMClient, extract_json
 from conftest import FakeLogger
 
 
-# ---------- extract_json(P0 ④) ----------
+# ---------- extract_json regression cases ----------
 
 def test_extract_json_plain():
     assert extract_json('{"a": 1}') == {'a': 1}
@@ -25,14 +25,14 @@ def test_extract_json_with_prose():
 
 
 def test_extract_json_value_starting_with_json_letters():
-    """旧 lstrip('json') 会逐字符误删 j/s/o/n 开头的正文。"""
+
     out = extract_json('```json\n{"note": "just so"}\n```')
     assert out == {'note': 'just so'}
 
 
 def test_extract_json_prefers_fenced_block():
-    """qwen3.6-27b 实测:先输出含花括号的解释文字再给 ```json 围栏 →
-    贪婪正则会把解释里的 { 一起吞掉,须优先解析围栏块。"""
+
+
     txt = 'Ids {3, 12} look plausible.\n```json\n{"valid_ids": [12]}\n```'
     assert extract_json(txt) == {'valid_ids': [12]}
 
@@ -46,7 +46,7 @@ def test_extract_json_invalid():
 # ---------- FakeOpenAI ----------
 
 class FakeClient:
-    """responder(kwargs) -> str 或 raise。记录所有调用。"""
+
 
     def __init__(self, responder, log):
         self._responder = responder
@@ -65,8 +65,8 @@ class FakeClient:
 
 
 def make_llm(monkeypatch, responders, budget=9, retries=1, extra=None):
-    """responders: {provider_name: responder};按 cfg 顺序命名 p1, p2...
-    extra: 附加到每个 provider 配置的键(如 min_interval_s)。"""
+
+
     calls = {name: [] for name in responders}
     import openai
 
@@ -94,7 +94,7 @@ def test_failover_to_second_provider(monkeypatch):
     def boom(kw):
         raise RuntimeError('down')
     llm, calls = make_llm(monkeypatch, {'p1': boom, 'p2': lambda kw: '{"x": 2}'})
-    monkeypatch.setattr(lc.time, 'sleep', lambda s: None)   # 不真等退避
+    monkeypatch.setattr(lc.time, 'sleep', lambda s: None)
     assert llm.ask('q') == {'x': 2}
     assert llm.providers[0]['alive'] is False
     assert llm.providers[1]['alive'] is True
@@ -104,25 +104,25 @@ def test_call_budget(monkeypatch):
     llm, calls = make_llm(monkeypatch, {'p1': lambda kw: '{"x": 1}'}, budget=2)
     assert llm.ask('q1') == {'x': 1}
     assert llm.ask('q2') == {'x': 1}
-    assert llm.ask('q3') is None                 # 预算耗尽
+    assert llm.ask('q3') is None
     assert len(calls['p1']) == 2
 
 
 def test_cache_key_includes_image_content(monkeypatch):
-    """P0 ⑤:同 prompt 不同图片不得命中同一缓存。"""
+
     llm, calls = make_llm(monkeypatch, {'p1': lambda kw: '{"x": 1}'})
     img_a = np.zeros((8, 8, 3), dtype=np.uint8)
     img_b = np.full((8, 8, 3), 255, dtype=np.uint8)
     llm.ask('same', images=[img_a])
     llm.ask('same', images=[img_b])
-    assert len(calls['p1']) == 2                 # 旧实现只会调 1 次
+    assert len(calls['p1']) == 2
     llm.ask('same', images=[img_a])
-    assert len(calls['p1']) == 2                 # 相同图片 → 命中缓存
+    assert len(calls['p1']) == 2
 
 
 def test_text_only_content_is_plain_string(monkeypatch):
-    """智谱等供应商对列表形式 content 的纯文本消息不解析(当成空消息回复),
-    冒烟实测发现 → 纯文本必须发字符串。"""
+
+
     llm, calls = make_llm(monkeypatch, {'p1': lambda kw: '{"x": 1}'})
     llm.ask('hello')
     assert calls['p1'][0]['messages'][0]['content'] == 'hello'
@@ -143,8 +143,8 @@ def test_json_repair_retry(monkeypatch):
     def responder(kw):
         state['n'] += 1
         if state['n'] == 1:
-            return '{"a": 1,,}'                  # 坏 JSON
-        return '{"a": 1}'                        # 修复请求的回复
+            return '{"a": 1,,}'
+        return '{"a": 1}'
     llm, calls = make_llm(monkeypatch, {'p1': responder})
     assert llm.ask('q') == {'a': 1}
     assert state['n'] == 2
@@ -152,8 +152,8 @@ def test_json_repair_retry(monkeypatch):
 
 
 def test_min_interval_between_provider_calls(monkeypatch):
-    """SJTU 实测:超限=请求挂起 ~58s 而非 429 → timeout 15s 会连环假超时把
-    供应商标 DOWN。供应商可配 min_interval_s 主动限速,首次调用不等待。"""
+
+
     llm, calls = make_llm(monkeypatch, {'p1': lambda kw: '{"x": 1}'},
                           extra={'min_interval_s': 6.5})
     clock = {'t': 100.0}
@@ -165,7 +165,7 @@ def test_min_interval_between_provider_calls(monkeypatch):
         clock['t'] += s
     monkeypatch.setattr(lc.time, 'sleep', fake_sleep)
     llm.ask('q1')
-    assert sleeps == []                          # 首次不等待
+    assert sleeps == []
     llm.ask('q2')
     assert len(calls['p1']) == 2
     assert sleeps and abs(sum(sleeps) - 6.5) < 0.1

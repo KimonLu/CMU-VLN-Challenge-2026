@@ -31,7 +31,7 @@ PANO = np.full((640, 1920, 3), 120, dtype=np.uint8)
 
 
 def test_integrate_keeps_foreground_cluster(smap):
-    """前景簇 + 穿透打到背景墙的点:中心应取前景(§7.3 最近主簇)。"""
+
     fg = cluster([2.0, 0.0, 0.5])
     bg = cluster([6.0, 0.0, 0.5], n=15, seed=1)
     pts = np.vstack([fg, bg])
@@ -47,26 +47,26 @@ def test_merge_and_confirm(smap):
     box = box_around(smap.proj, pts)
     det = {'label': 'chair', 'conf': 0.5, 'box': box}
     smap.integrate(PANO, [det], pts, IDENTITY)
-    assert smap.confirmed() == []                # 单次观测不确认
+    assert smap.confirmed() == []
     smap.integrate(PANO, [det], pts, IDENTITY)
-    assert len(smap.objects) == 1                # 合并而非新建
+    assert len(smap.objects) == 1
     assert smap.objects[0].n_obs == 2
     assert len(smap.confirmed()) == 1
 
 
 def test_min_points_thin_class_relaxed(smap):
-    pts = cluster([2.0, 0.0, 0.5], n=5)          # 5 点 < min_lidar_pts=8
+    pts = cluster([2.0, 0.0, 0.5], n=5)
     box = box_around(smap.proj, pts)
     smap.integrate(PANO, [{'label': 'chair', 'conf': 0.5, 'box': box}],
                    pts, IDENTITY)
-    assert len(smap.objects) == 0                # 普通类:丢弃
+    assert len(smap.objects) == 0
     smap.integrate(PANO, [{'label': 'window', 'conf': 0.5, 'box': box}],
                    pts, IDENTITY)
-    assert len(smap.objects) == 1                # 薄类阈值减半(4)→ 通过
+    assert len(smap.objects) == 1
 
 
 def test_approximate_grounding_keeps_sparse_reflection(smap):
-    """玻璃/小物体只有一个激光点时先保存粗位置，而不是永久漏掉候选。"""
+
     smap.cfg['approx_min_lidar_pts'] = 1
     smap.cfg['approx_default_size_m'] = 0.3
     pts = np.asarray([[2.0, 0.0, 0.5]])
@@ -79,16 +79,16 @@ def test_approximate_grounding_keeps_sparse_reflection(smap):
 
 
 def test_integrate_wrapped_box_at_seam(smap):
-    """P0 ③配套:跨 360° 接缝的检测框也能关联到激光点。"""
-    fg = cluster([-2.0, 0.0, 0.5])               # 正后方 → u≈0/1920 接缝
+
+    fg = cluster([-2.0, 0.0, 0.5])
     pix, valid = smap.proj.points_to_pixels(fg)
     pix = pix[valid]
-    # 构造 wrap-aware 框(u 相对中心展开,可为负)
+
     uc = 0.0
     du = (pix[:, 0] - uc + 960) % 1920 - 960
     box = (uc + du.min() - 8, pix[:, 1].min() - 8,
            uc + du.max() + 8, pix[:, 1].max() + 8)
-    assert box[0] < 0 < box[2]                   # 确认确实跨缝
+    assert box[0] < 0 < box[2]
     smap.integrate(PANO, [{'label': 'door', 'conf': 0.5, 'box': box}],
                    fg, IDENTITY)
     assert len(smap.objects) == 1
@@ -96,8 +96,8 @@ def test_integrate_wrapped_box_at_seam(smap):
 
 
 def test_best_crop_padded_with_context(smap):
-    """SJTU 实测:紧框小裁剪放大后模糊难辨(粉枕头连人都认不出)→
-    crop 存图时按框尺寸外扩上下文,复核 VLM 才有环境线索。"""
+
+
     pts = cluster([2.0, 0.0, 0.5])
     box = box_around(smap.proj, pts)
     smap.integrate(PANO, [{'label': 'chair', 'conf': 0.5, 'box': box}],
@@ -117,20 +117,20 @@ def test_norm_label():
     assert _norm_label('couch') == 'sofa'
     assert _norm_label('paintings') == 'picture'
     assert _norm_label('potted plants') == 'plant'
-    assert _norm_label('glass') == 'glass'       # ss 结尾不去 s
+    assert _norm_label('glass') == 'glass'
 
 
 def test_by_label_matching(smap):
     smap.objects = [mk(0, 'coffee table'), mk(1, 'bookshelf'), mk(2, 'book'),
                     mk(3, 'painting'), mk(4, 'sofa'), mk(5, 'wall lamp')]
     ids = lambda q: {o.oid for o in smap.by_label(q)}
-    assert ids('table') == {0}                   # 尾词命中
-    assert ids('book') == {2}                    # P1 ⑩:不再误配 bookshelf
-    assert ids('picture') == {3}                 # 同义词
-    assert ids('sofas') == {4}                   # 复数
+    assert ids('table') == {0}
+    assert ids('book') == {2}
+    assert ids('picture') == {3}
+    assert ids('sofas') == {4}
     assert ids('couch') == {4}
     assert ids('wall lamp') == {5}
-    assert ids('lamp') == {5}                    # 尾词
+    assert ids('lamp') == {5}
     assert ids('') == set()
 
 
@@ -138,20 +138,20 @@ def test_scene_text_no_side_effect(smap):
     smap.objects = [mk(0, 'sofa'), mk(1, 'chair'), mk(2, 'table')]
     before = [o.oid for o in smap.objects]
     txt = smap.scene_text(relevant_words=['table'])
-    assert '[2]' in txt.splitlines()[1]          # 相关物体排前
-    assert [o.oid for o in smap.objects] == before   # 不改库内顺序
+    assert '[2]' in txt.splitlines()[1]
+    assert [o.oid for o in smap.objects] == before
 
 
 def test_best_crop_is_deep_copy(smap):
-    """best_crop 若是全景帧的切片视图,会把整张 pano(3.7MB)钉在内存无法释放,
-    物体一多就是数百 MB → 必须存深拷贝。"""
+
+
     fg = cluster([2.0, 0.0, 0.5])
     box = box_around(smap.proj, fg)
     smap.integrate(PANO.copy(), [{'label': 'chair', 'conf': 0.5, 'box': box}],
                    fg, IDENTITY)
     crop = smap.objects[0].best_crop
     assert crop is not None and crop.size > 0
-    assert crop.base is None                      # 自持内存,非视图
+    assert crop.base is None
 
 
 def test_saved_view_is_bounded_and_decodable(smap):
@@ -162,5 +162,5 @@ def test_saved_view_is_bounded_and_decodable(smap):
     assert len(smap._viewpoints) == 2
     view = smap.best_view('chair')
     assert view is not None and view.shape == PANO.shape
-    # 同分时保留最新帧。
+
     assert abs(float(view.mean()) - 80.0) < 2.0

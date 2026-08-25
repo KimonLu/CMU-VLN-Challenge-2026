@@ -1,9 +1,10 @@
-"""离散 Fréchet 距离(纯 numpy,迭代 DP)。用于指令题轨迹 vs 真值 ply 对比。"""
+"""Discrete Frechet and endpoint distance utilities."""
+
 import numpy as np
 
 
 def resample(traj, max_pts=400):
-    """降采样到 <=max_pts 点,控制 O(n*m) 规模。traj: (N,2+)."""
+
     traj = np.asarray(traj, dtype=float)
     if len(traj) <= max_pts:
         return traj
@@ -12,7 +13,7 @@ def resample(traj, max_pts=400):
 
 
 def frechet_distance(p, q, max_pts=400):
-    """离散 Fréchet 距离(米)。p, q: (N,>=2) 只用前两列(xy)。"""
+
     p = resample(np.asarray(p, dtype=float)[:, :2], max_pts)
     q = resample(np.asarray(q, dtype=float)[:, :2], max_pts)
     if len(p) == 0 or len(q) == 0:
@@ -33,7 +34,7 @@ def frechet_distance(p, q, max_pts=400):
 
 
 def endpoint_distance(p, q):
-    """两轨迹终点的欧氏距离(米)。"""
+
     p, q = np.asarray(p, dtype=float), np.asarray(q, dtype=float)
     if len(p) == 0 or len(q) == 0:
         return float('inf')

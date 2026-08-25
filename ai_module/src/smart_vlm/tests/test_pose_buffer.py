@@ -35,7 +35,7 @@ def test_empty_and_latest():
 def test_out_of_order_dropped():
     buf = PoseBuffer()
     buf.push(2.0, P(2.0))
-    buf.push(1.0, P(1.0))       # 乱序 → 丢弃
+    buf.push(1.0, P(1.0))
     assert buf.query(1.0) == P(2.0) or buf.query(1.0) is None
     assert len(buf._t) == 1
 
@@ -69,7 +69,7 @@ def test_keyframe_translation():
 
 
 def test_keyframe_rotation_only():
-    """P1 ⑧:纯旋转(原地转身)也要触发关键帧。"""
+
     _, xy, yaw = keyframe_due(_pose(0, 0, 0), None, None, 0.5, 30)
     due, _, _ = keyframe_due(_pose(0, 0, math.radians(20)), xy, yaw, 0.5, 30)
     assert not due
@@ -78,10 +78,10 @@ def test_keyframe_rotation_only():
 
 
 def test_pose_buffer_covers_delayed_panorama():
-    """360 图像实测可延迟约 7s，默认历史必须仍能查到对应位姿。"""
+
     b = PoseBuffer()
     for i in range(1800):
-        b.push(i * 0.005, (i,))       # 200Hz，共 9 秒
+        b.push(i * 0.005, (i,))
     assert b.query(1.5) == (300,)
 
 

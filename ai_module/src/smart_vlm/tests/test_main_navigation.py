@@ -1,4 +1,3 @@
-"""main_node 末段执行策略的无 ROS 单测。"""
 import sys
 import types
 from types import MethodType
@@ -7,7 +6,7 @@ import numpy as np
 
 
 def _install_ros_stubs():
-    """宿主 venv 无 ROS，只为导入 main_node 提供类型占位。"""
+
     if 'rclpy' in sys.modules:
         return
     try:
@@ -92,7 +91,7 @@ def harness(path=()):
 
 
 def test_goto_lateral_drift_is_no_goal_progress(monkeypatch):
-    """机器人移动很多但没有接近目标时，不能重置卡死窗口。"""
+
     h = harness()
     h.pose = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0)
     h.pub_wp = types.SimpleNamespace(publish=lambda msg: None)
@@ -100,8 +99,8 @@ def test_goto_lateral_drift_is_no_goal_progress(monkeypatch):
 
     def sleep(dt):
         clock[0] += 1.0
-        # 沿与目标方向正交的 y 轴漂移；累计位移远大于旧的 0.3m
-        # 阈值，但到 (5, 0) 的距离始终没有改善 0.15m。
+
+
         y = 0.05 * (clock[0] - 100.0)
         h.pose = (0.0, y, 0.0, 0.0, 0.0, 0.0, 1.0)
 
@@ -115,7 +114,7 @@ def test_goto_lateral_drift_is_no_goal_progress(monkeypatch):
 
 
 def test_goto_goal_progress_resets_progress_window(monkeypatch):
-    """只要目标距离在窗口内改善足够，进度窗口应继续向前滚动。"""
+
     h = harness()
     h.pose = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0)
     h.pub_wp = types.SimpleNamespace(publish=lambda msg: None)
@@ -146,7 +145,7 @@ def test_follow_waypoints_final_goal_not_unconditionally_repeated():
         h, [(0.0, 0.0), (3.0, 0.0), (5.0, 0.0)],
         main_node.time.time() + 100, final_start_idx=1)
     assert ok
-    assert h.calls[0][2:] == (False, None)        # 粗段保持旧行为
+    assert h.calls[0][2:] == (False, None)
     assert all(c[2:] == (True, 0.5) for c in h.calls[1:])
     assert sum(c[0] == (5.0, 0.0) for c in h.calls) == 1
     assert h.gm.calls == []
@@ -159,9 +158,9 @@ def test_follow_waypoints_respects_planner_final_boundary():
     def goto(xy, timeout=25, stuck_check=False, reach=None):
         nonlocal first
         h.calls.append((tuple(xy), stuck_check, reach))
-        if first:                                  # 靠近终点的前序约束失败
+        if first:
             first = False
-            return False                          # 粗段旧行为：继续，不直奔终点
+            return False
         h.pose = (xy[0], xy[1], 0.0, 0.0, 0.0, 0.0, 1.0)
         return True
 
@@ -207,7 +206,7 @@ def test_follow_waypoints_final_failure_replans_once_with_penalties():
 
 
 def test_final_failure_adds_episode_local_corridor_penalty_before_replan():
-    """末段失败走廊应加入本题局部记忆，A* 不再原路重试。"""
+
     h = harness([(2.5, 1.0), (5.0, 0.0)])
     failed = False
 
@@ -216,7 +215,7 @@ def test_final_failure_adds_episode_local_corridor_penalty_before_replan():
         h.calls.append(tuple(xy))
         if not failed:
             failed = True
-            # 从末段起点 (0, 0) 向 (3, 0) 推进到 (2, 0) 后失败。
+
             h.pose = (2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0)
             h._last_goto_result = {'status': 'no_goal_progress'}
             return False
@@ -231,7 +230,7 @@ def test_final_failure_adds_episode_local_corridor_penalty_before_replan():
         final_start_idx=0)
 
     _, _, replanning_zones = h.gm.calls[0]
-    assert replanning_zones is not original  # episode-local，不污染规划器输入
+    assert replanning_zones is not original
     assert original == [((8.0, 8.0), (9.0, 9.0), 1.2, 50.0)]
     assert replanning_zones[:1] == original
     assert len(replanning_zones) == 2
@@ -264,7 +263,7 @@ def test_follow_waypoints_replan_no_path_directs_goal_once():
 
 
 def test_final_failure_switches_to_alternate_standoff():
-    """同一物体一侧失败后，应改走已验证可达的另一停靠点而非原点重试。"""
+
     h = harness()
     h.gm.astar = lambda start, goal, penalty_zones=None: [tuple(start), tuple(goal)]
     failed = False
@@ -301,7 +300,7 @@ def test_follow_waypoints_final_timeout_is_bounded_by_hard_abort(monkeypatch):
     monkeypatch.setattr(main_node.time, 'time', lambda: 100.0)
     assert SmartVLM.follow_waypoints(
         h, [(2.0, 0.0)], t_abort=108.0, final_start_idx=0)
-    assert timeouts == [8.0]                    # min(25s, 70s, hard 剩余 8s)
+    assert timeouts == [8.0]
 
 
 def test_follow_waypoints_final_points_share_one_budget(monkeypatch):
@@ -320,11 +319,11 @@ def test_follow_waypoints_final_points_share_one_budget(monkeypatch):
     SmartVLM.follow_waypoints(
         h, [(1.0, 0.0), (2.0, 0.0), (3.0, 0.0), (4.0, 0.0)],
         t_abort=200.0, final_start_idx=0)
-    assert timeouts == [25, 25, 25, 10.0]        # 共享 70s，末点仅剩 10s
+    assert timeouts == [25, 25, 25, 10.0]
 
 
 def test_relation_final_target_never_early_stops():
-    """q5 根治：带空间关系的最终目标不得因局部误检而早停。"""
+
     h = types.SimpleNamespace()
     h.answerer = types.SimpleNamespace(can_ground=lambda *args: True)
     h.targets_found = lambda parsed: True

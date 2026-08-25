@@ -1,9 +1,10 @@
-"""rosbag2 / live topic 数据采集公共工具(容器内运行,需 ROS Jazzy)。"""
+"""Shared rosbag2 and live-topic data acquisition helpers."""
+
 import numpy as np
 
 
 def pc2_to_xyz_intensity(msg):
-    """PointCloud2 → (N,3) xyz, (N,) intensity(float32 字段)。"""
+
     n = msg.width * msg.height
     if n == 0:
         return np.zeros((0, 3)), np.zeros(0)
@@ -35,7 +36,7 @@ def stamp_sec(msg):
 
 
 def read_bag(path, topics):
-    """迭代 (topic, msg, t_sec)。自动识别 sqlite3/mcap。"""
+
     import rosbag2_py
     from rclpy.serialization import deserialize_message
     from rosidl_runtime_py.utilities import get_message
@@ -51,11 +52,8 @@ def read_bag(path, topics):
 
 def collect_synced_samples(source_iter, n_samples=10, min_gap_s=1.0,
                            odom_max_dt=0.15):
-    """从 (topic,msg,t) 流中取 N 组同步样本 (pano_bgr, scan_map_xyz, odom_pose)。
 
-    以 /camera/image 为主时钟;odom 取与图像 header.stamp 最近者;
-    scan 取最近一帧 /registered_scan 的累积快照。
-    """
+
     samples = []
     odoms = []                                    # [(t, pose)]
     scan = None
@@ -83,7 +81,7 @@ def collect_synced_samples(source_iter, n_samples=10, min_gap_s=1.0,
 
 
 def live_source(topics_types, duration_s):
-    """订阅 live topic,yield (topic, msg, t)。topics_types: {topic: MsgType}。"""
+
     import queue
     import time
     import rclpy

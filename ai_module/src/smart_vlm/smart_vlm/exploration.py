@@ -1,4 +1,5 @@
-"""全局栅格图 + frontier 探索 + A*(报告 §6)。纯 CPU。"""
+"""Occupancy-grid exploration, A* planning, and waypoint selection."""
+
 import numpy as np
 import heapq
 
@@ -6,12 +7,8 @@ UNKNOWN, FREE, OBSTACLE = 0, 1, 2
 
 
 def bootstrap_waypoints(origin_xy, cfg):
-    """返回可选的旧式起步平移扫描点。
 
-    比赛相机本身已有 360° 水平视野。四向各平移一次不仅不会补充朝向覆盖，
-    在新增四场景的 20 题中还稳定制造约 3×8s/题的 timeout。因此默认关闭；
-    保留显式开关只用于后续消融，而不是删除可回退行为。
-    """
+
     if not cfg.get('init_sweep_enabled', False):
         return []
     origin = np.asarray(origin_xy, dtype=float)
@@ -21,7 +18,7 @@ def bootstrap_waypoints(origin_xy, cfg):
 
 
 def decimate(path, step=2.0):
-    """A* 细路径 → 稀疏航点(保留拐点节奏与终点)。"""
+
     out, acc = [], 0.0
     for i in range(1, len(path)):
         acc += float(np.linalg.norm(np.asarray(path[i]) - np.asarray(path[i - 1])))
@@ -33,13 +30,8 @@ def decimate(path, step=2.0):
 
 def decimate_final_approach(path, step=2.0, final_step=1.0,
                             final_radius=3.0, return_start=False):
-    """A* 路径分段抽稀：常规段用 ``step``，末段用更密的
-    ``final_step``。
 
-    ``final_radius`` 按沿路径到终点的剩余弧长计算，而非直线距离，
-    因此家具区内的绕行路径也能稳定保留末段航点。
-    ``return_start=True`` 时同时返回细航点后缀在输出中的起始下标。
-    """
+
     if len(path) < 2:
         out = [tuple(path[0])] if path else []
         return (out, 0) if return_start else out
@@ -54,7 +46,7 @@ def decimate_final_approach(path, step=2.0, final_step=1.0,
         remaining[i] = remaining[i + 1] + float(
             np.linalg.norm(pts[i + 1] - pts[i]))
 
-    # 第一个进入末段半径的原始 A* 点，同时作为粗/细两段边界。
+
     fine_start = next((i for i, d in enumerate(remaining)
                        if d <= final_radius), len(path) - 1)
     coarse = decimate(path[:fine_start + 1], step)
@@ -65,11 +57,8 @@ def decimate_final_approach(path, step=2.0, final_step=1.0,
 
 
 def line_waypoints(start_xy, goal_xy, step=1.0):
-    """当全局 A* 暂无路径时，仍以小步长把目标交给局部规划器。
 
-    直线只是 waypoint 提示而非碰撞路径；系统局部规划器仍负责避障。这保证
-    q5 式密集家具区不会因 A* 返回 None 而从远处一步直冲终点。
-    """
+
     start = np.asarray(start_xy, dtype=float)
     goal = np.asarray(goal_xy, dtype=float)
     dist = float(np.linalg.norm(goal - start))
@@ -81,19 +70,19 @@ def line_waypoints(start_xy, goal_xy, step=1.0):
 
 
 class GridMap:
-    """滚动扩张的全局 2D 栅格。"""
+
 
     def __init__(self, res=0.2, init_span=40.0, max_span=400.0):
         self.res = res
         n = int(init_span / res)
         self.grid = np.zeros((n, n), dtype=np.uint8)
-        self.origin = np.array([-init_span / 2, -init_span / 2])  # 世界坐标
+        self.origin = np.array([-init_span / 2, -init_span / 2])
         self.max_span = max_span
         self._center0 = self.origin + init_span / 2
 
     def _sane(self, xy):
-        """跨度硬上限的点过滤。SLAM 未收敛时错误配准的远点若不丢弃,
-        _ensure 会为覆盖它分配巨型栅格,数秒吃爆内存(2026-07-08 两次事故)。"""
+
+
         return np.abs(np.atleast_2d(xy) - self._center0).max(axis=1) \
             < self.max_span / 2
 
@@ -101,7 +90,7 @@ class GridMap:
         return ((np.atleast_2d(xy) - self.origin) / self.res).astype(int)
 
     def _ensure(self, xy):
-        """按需非对称扩张,保证 xy(单点或 (N,2))全部落进栅格。"""
+
         ij = self._idx(xy)
         margin = 25
         lo, hi = ij.min(0), ij.max(0)
@@ -116,12 +105,12 @@ class GridMap:
             self.origin = self.origin - pad_lo * self.res
 
     def _idx_safe(self, xy):
-        """_ensure 后的越界兜底(理论不触发)。"""
+
         ij = self._idx(xy)
         return np.clip(ij, 0, np.array(self.grid.shape) - 1)
 
     def update_terrain(self, pts, intensities, obs_thresh):
-        """terrain_map_ext 一帧:低代价=FREE,高代价=OBSTACLE(OBSTACLE 不被 FREE 覆盖)。"""
+
         if len(pts) == 0:
             return
         m = self._sane(pts[:, :2])
@@ -164,7 +153,7 @@ class GridMap:
                 out.append({'centroid': self.world(ij.mean(0)), 'size': len(ij)})
         return out
 
-    # ---------- A*(8 邻域,OBSTACLE 膨胀 + 额外代价区)----------
+
     def astar(self, start_xy, goal_xy, inflate=0.3, penalty_zones=None):
         from scipy import ndimage
         cost = np.ones_like(self.grid, dtype=np.float32)
@@ -172,7 +161,7 @@ class GridMap:
             (self.grid == OBSTACLE).astype(np.uint8),
             max(1, int(2 * inflate / self.res) + 1)) > 0
         cost[obs] = np.inf
-        cost[self.grid == UNKNOWN] = 3.0          # 允许穿未知但有代价
+        cost[self.grid == UNKNOWN] = 3.0
         for z in (penalty_zones or []):           # z: ((x1,y1),(x2,y2),width,cost)
             self._paint_corridor(cost, *z)
         s = tuple(self._idx(start_xy)[0]); t = tuple(self._idx(goal_xy)[0])
@@ -219,7 +208,7 @@ class GridMap:
                 cost[sl][finite] = np.maximum(cost[sl][finite], c)
 
     def nearest_free(self, xy, max_r=2.0):
-        """物体旁最近可达点(报告 §9.4 goto 偏移)。"""
+
         best, bd = None, np.inf
         for r in np.arange(0.4, max_r, self.res):
             for ang in np.linspace(0, 2 * np.pi, 16, endpoint=False):
@@ -238,15 +227,8 @@ class GridMap:
                             max_r=2.0, preferred_r=1.2,
                             min_clearance=0.35, penalty_zones=None,
                             angles=24, max_path_evals=12):
-        """为物体目标生成按路径代价排序的安全停靠点。
 
-        ``nearest_free`` 只看目标周围第一个 FREE 栅格，容易选到桌椅/墙体错误
-        一侧。本方法先按自由空间余量筛选环形候选，再只对最有希望的少量候选
-        跑 A*，最后综合真实路径长度、障碍余量和期望停靠半径排序。
 
-        返回元素为 ``{'point','path','score','clearance','radius'}``；无可靠候选
-        时返回空列表，由调用者执行旧兼容回退。
-        """
         from scipy import ndimage
 
         start = np.asarray(start_xy, dtype=float)
@@ -257,8 +239,7 @@ class GridMap:
         clearance = ndimage.distance_transform_edt(
             self.grid != OBSTACLE) * self.res
 
-        # 0.4m 的径向间隔兼顾候选多样性与规划时间；按栅格去重防止
-        # 低分辨率地图上相邻角度落到同一 cell。
+
         radial_step = max(0.4, 2 * self.res)
         radii = list(np.arange(min_r, max_r + 1e-6, radial_step))
         if not radii or radii[-1] < max_r - 0.15:
@@ -273,10 +254,8 @@ class GridMap:
                     continue
                 if self.grid[i, j] != FREE or clearance[i, j] < min_clearance:
                     continue
-                # 先用廉价启发式挑出至多 max_path_evals 个候选，避免每个
-                # instruction 对几十个点反复跑 Python A*。
-                # 半径偏离必须足以抵消“越远离目标、离机器人越近”的路径
-                # 捷径，否则排序会系统性选择 max_r，终点虽好走却离目标太远。
+
+
                 pre_score = (float(np.linalg.norm(point - start))
                              + 0.35 / max(float(clearance[i, j]), 0.05)
                              + 1.5 * abs(radius - preferred_r))
@@ -302,13 +281,13 @@ class GridMap:
         return sorted(ranked, key=lambda item: item['score'])
 
 class Explorer:
-    """frontier 选择 + 卡死处理。由 main_node 以 ~1Hz 驱动。"""
+
 
     def __init__(self, gridmap: GridMap, cfg, logger):
         self.gm = gridmap
         self.cfg = cfg
         self.log = logger
-        self.blacklist = []           # 失败的 frontier 质心
+        self.blacklist = []
         self.current_goal = None
 
     def next_goal(self, robot_xy):

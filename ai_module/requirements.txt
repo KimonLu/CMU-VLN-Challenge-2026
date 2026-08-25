@@ -1,0 +1,13 @@
+# Python dependencies added by the submitted AI module.
+# ROS 2 Jazzy dependencies are provided by the official challenge base image.
+torch==2.12.1
+torchvision==0.27.1
+numpy==1.26.4
+scipy==1.11.4
+opencv-python==4.11.0.86
+opencv-python-headless==4.11.0.86
+ultralytics==8.4.90
+ultralytics-thop==2.0.20
+openai==2.44.0
+PyYAML==6.0.1
+git+https://github.com/ultralytics/CLIP.git@f5e9fc6a896e66309f07747bd607704f6c3d282a

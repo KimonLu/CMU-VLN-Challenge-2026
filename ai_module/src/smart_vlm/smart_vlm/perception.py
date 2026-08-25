@@ -1,4 +1,5 @@
-"""开放词汇检测(报告 §7.2)。YOLO-World,CPU/GPU 自适应;可运行时更新词表。"""
+"""CPU/GPU-adaptive open-vocabulary object detection."""
+
 import threading
 import numpy as np
 
@@ -17,11 +18,11 @@ class Detector:
         model_name = cfg['model_gpu'] if self.device == 'cuda' else cfg['model_cpu']
         import os
         if os.path.sep in model_name and not os.path.exists(model_name):
-            model_name = os.path.basename(model_name)  # 本地开发:自动下载到 cwd
+            model_name = os.path.basename(model_name)
         from ultralytics import YOLOWorld
         self.model = YOLOWorld(model_name)
-        # 先迁移设备再编码文本类别。Ultralytics 的 YOLO-World 会缓存 CLIP
-        # 文本编码器；先 set_classes、后首次 predict 才迁移设备会留下不一致状态。
+
+
         self.model.to(self.device)
         self._sync_clip_device(self.model)
         self.model.set_classes(self.vocab)
@@ -47,7 +48,7 @@ class Detector:
             return
 
     def extend_vocab(self, words):
-        """问题解析后追加检测词表(报告 §9.1)。"""
+
         with self.lock:
             new = [w for w in words if w and w not in self.vocab]
             if new:
@@ -57,11 +58,8 @@ class Detector:
                 self.log.info(f'Vocab extended: {new}')
 
     def set_task_vocab(self, words):
-        """把检测词表收窄到当前问题，而不是在几十个基础类别上不断追加。
 
-        YOLO-World 的类别提示会相互竞争；公开参赛实现也普遍逐题设置 prompts。
-        60+ 个无关基础类别会明显压低小物体召回，并造成 monitor→TV 等误分类。
-        """
+
         with self.lock:
             vocab = []
             for word in words:
@@ -76,7 +74,7 @@ class Detector:
             self.log.info(f'Task vocab ({len(vocab)}): {vocab}')
 
     def detect(self, img):
-        """返回 [{'label','conf','box':(x1,y1,x2,y2)}...]"""
+
         with self.lock:
             res = self.model.predict(img, conf=self.cfg['conf_thresh'],
                                      iou=self.cfg.get('iou_thresh', 0.5),
@@ -91,8 +89,7 @@ class Detector:
         return out
 
 
-# ---------- 颜色属性(报告 §7.3)----------
-_COLOR_TABLE = [  # (name, hsv 判据函数)
+_COLOR_TABLE = [
     ('black',  lambda h, s, v: v < 50),
     ('white',  lambda h, s, v: v > 200 and s < 40),
     ('gray',   lambda h, s, v: s < 40),

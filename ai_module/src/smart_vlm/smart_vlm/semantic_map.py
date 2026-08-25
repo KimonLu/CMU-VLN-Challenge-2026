@@ -1,4 +1,5 @@
-"""语义物体库:2D 检测 + 激光深度 → 3D 物体,增量合并(报告 §7.3–7.4)。"""
+"""Incremental object-level semantic mapping from images and LiDAR."""
+
 import numpy as np
 from dataclasses import dataclass, field
 from .perception import dominant_color
@@ -19,7 +20,7 @@ _SYNONYMS = {
 
 
 def _norm_label(s):
-    """小写、去尾 s、同义词归一。"""
+
     s = (s or '').lower().strip()
     if s.endswith('s') and not s.endswith('ss'):
         s = s[:-1]
@@ -31,10 +32,10 @@ class MapObject:
     oid: int
     label: str
     color: str
-    center: np.ndarray          # map 系 (3,)
+    center: np.ndarray
     size: np.ndarray            # (l, w, h)
     n_obs: int = 1
-    weight: float = 1.0         # 累计激光点数
+    weight: float = 1.0
     best_crop: object = None    # BGR ndarray
     best_crop_area: float = 0.0
 
@@ -55,8 +56,8 @@ class SemanticMap:
         self.log = logger
         self.objects: list[MapObject] = []
         self._next_id = 0
-        # 直接视觉计数使用的候选全景。JPEG 压缩后只保留少量高信息帧，
-        # 避免保存 1920x640 原图导致内存随探索时长线性增长。
+
+
         self._viewpoints = []
         self._view_seq = 0
 
@@ -78,12 +79,12 @@ class SemanticMap:
                 'seq': self._view_seq}
         self._viewpoints.append(item)
         cap = int(self.cfg.get('max_saved_views', 6))
-        # 检测丰富的帧优先；完全无检测时保留较新的不同位姿帧。
+
         self._viewpoints.sort(key=lambda v: (v['score'], v['seq']), reverse=True)
         del self._viewpoints[cap:]
 
     def best_view(self, label=''):
-        """返回最可能覆盖目标类别的一张 BGR 全景；没有帧时返回 None。"""
+
         import cv2
         if not self._viewpoints:
             return None
@@ -92,10 +93,10 @@ class SemanticMap:
                    key=lambda v: (v['counts'].get(q, 0), v['score'], v['seq']))
         return cv2.imdecode(best['jpeg'], cv2.IMREAD_COLOR)
 
-    # ---------- 主入口:处理一个关键帧 ----------
+
     def integrate(self, pano_bgr, detections, scan_map_pts, odom_pose):
-        """detections 来自 4 视图,box 已换算为全景像素域 (u1,v1,u2,v2)。
-        scan_map_pts: (N,3) map 系点云快照;odom_pose: 与图像同步的位姿。"""
+
+
         self._remember_view(pano_bgr, detections)
         pts_sensor = transform_points(scan_map_pts, odom_pose)
         pix, valid = self.proj.points_to_pixels(pts_sensor)
@@ -103,7 +104,7 @@ class SemanticMap:
 
         for det in detections:
             u1, v1, u2, v2 = det['box']
-            # u 可越出 [0,W)(跨 360° 接缝),用相对中心的 wrap 距离判断
+
             W = self.proj.W
             uc, halfw = (u1 + u2) / 2, (u2 - u1) / 2
             du = (pix[:, 0] - uc + W / 2) % W - W / 2
@@ -117,8 +118,8 @@ class SemanticMap:
             if len(in_pts) < self.cfg.get('approx_min_lidar_pts', min_pts):
                 continue
             if approximate:
-                # 玻璃/小物体常只有 1–7 个激光点。公开队伍的实践表明，先保留
-                # 粗位置供关系推理、后续多视角再收敛，比永久丢弃更稳健。
+
+
                 core = in_pts
                 center = np.median(core, axis=0)
                 size = np.full(3, self.cfg.get(
@@ -131,9 +132,8 @@ class SemanticMap:
                 hi = np.percentile(core, 95, axis=0)
                 center = (lo + hi) / 2
                 size = np.maximum(hi - lo, 0.05)
-            # 外扩上下文再裁:紧框小图放大后 VLM 认不出(SJTU 实测,
-            # 粉枕头紧裁后连人都难辨);带上周边环境复核才有线索。
-            # copy:切片视图会把整张 pano 钉在内存,物体一多泄漏数百 MB
+
+
             margin = self.cfg.get('context_crop_margin_ratio', 0.25)
             pu, pv = margin * (u2 - u1), margin * (v2 - v1)
             crop = pano_bgr[max(0, int(v1 - pv)):max(0, int(v2 + pv)),
@@ -142,15 +142,15 @@ class SemanticMap:
                         len(core), crop)
 
     def _nearest_cluster(self, pts, odom_pose):
-        """按到相机距离直方图取最近主簇,剔除打到背景的穿透点(报告 §7.3)。"""
+
         cam = np.array(odom_pose[:3])
         d = np.linalg.norm(pts - cam, axis=1)
         if len(pts) < 12:
-            # 点太少不足以分簇(薄物体类常见):取中位距离 ±1m,防单点穿透拉偏
+
             m = np.abs(d - np.median(d)) < 1.0
             return pts[m] if m.sum() >= 3 else None
         hist, edges = np.histogram(d, bins=24)
-        # 从最近的达标 bin 起,聚合连续非空区间
+
         nz = np.flatnonzero(hist >= max(1, int(0.05 * len(pts))))
         if len(nz) == 0:
             return None
@@ -182,13 +182,13 @@ class SemanticMap:
                                       best_crop_area=crop.shape[0] * crop.shape[1]))
         self._next_id += 1
 
-    # ---------- 查询 ----------
+
     def confirmed(self):
         return [o for o in self.objects if o.n_obs >= self.cfg['confirm_obs']]
 
     def by_label(self, label, confirmed_only=True):
-        """类别查询:归一化(同义词/复数)后全等,或查询词==label 的尾词
-        (query "table" 命中 "coffee table";"book" 不命中 "bookshelf")。"""
+
+
         src = self.confirmed() if confirmed_only else self.objects
         q = _norm_label(label)
         if not q:

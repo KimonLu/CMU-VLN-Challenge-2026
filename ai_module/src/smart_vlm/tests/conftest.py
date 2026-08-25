@@ -1,4 +1,3 @@
-"""pytest 公共配置:无 ROS 环境下测试 smart_vlm 各模块(main_node 除外)。"""
 import os
 import sys
 

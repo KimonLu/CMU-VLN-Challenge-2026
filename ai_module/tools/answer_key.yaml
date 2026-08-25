@@ -1,6 +1,5 @@
-# 数值题(Q1)真值 — 由 15 个 questions/<scene>/questions.pdf 自动提取("Print N in terminal")
-# 指代题(Q2/Q3)真值是 bbox 图、指令题(Q4/Q5)真值是 trajectory_q4/q5.ply,不在此文件。
-# 用途:tools/score_regression.py 对照打分。
+
+
 numerical:
   arabic_room: 2        # How many sofas are below a window?
   chinese_room: 6       # Count the number of chairs with pillows on them.
@@ -18,8 +17,7 @@ numerical:
   office_2: 1           # How many potted plants are on a table?
   studio: 3             # How many framed records are above the couch?
 
-# 指代题开发集 3D 真值。仅用于本地回归代理评分，不会被运行时节点读取。
-# center/size 来自官方场景 object_list.txt；axis-aligned IoU 是非官方近似口径。
+
 object_reference:
   arabic_room:
     2:

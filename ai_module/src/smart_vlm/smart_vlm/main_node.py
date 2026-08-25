@@ -1,8 +1,5 @@
-"""smart_vlm 主节点:状态机 + 订阅/发布 + 时间预算 + 看门狗(报告 §11)。
+"""ROS 2 state machine for perception, exploration, and challenge responses."""
 
-状态: BOOT → WAIT_QUESTION → PARSE → EXPLORE → ANSWER → (EXECUTE) → DONE
-硬保证: T+hard_deadline 必发合法答案;任何异常都降级而不是崩溃。
-"""
 import threading
 import time
 import traceback
@@ -32,7 +29,7 @@ from .pose_buffer import PoseBuffer, TimedValueBuffer, stamp_to_sec, keyframe_du
 
 
 def pc2_to_xyz_intensity(msg):
-    """PointCloud2 → (N,3) xyz, (N,) intensity。假设 float32 字段。"""
+
     n = msg.width * msg.height
     if n == 0:
         return np.zeros((0, 3)), np.zeros(0)
@@ -78,20 +75,20 @@ class SmartVLM(Node):
         self.pub_marker = self.create_publisher(Marker, '/selected_object_marker', 5)
         self.pub_num = self.create_publisher(Int32, '/numerical_response', 5)
 
-        # 共享状态
-        self.pose = None                # 最新位姿 (x,y,z,qx,qy,qz,qw)
-        # 360 图像经 DDS/解压后实测可滞后 6.9–7.5s。旧 512 帧位姿历史只覆盖
-        # ~2.6s，导致 chinese_room/office_2 的每一帧都因“无同步位姿”被丢弃。
+
+        self.pose = None
+
+
         self.pose_buf = PoseBuffer(maxlen=4096)
         self.scan_history = TimedValueBuffer(maxlen=128, max_gap_s=0.35)
         self.question = None
         self.scan_buf = np.zeros((0, 3))
         self.last_kf_xy = None
         self.last_kf_yaw = None
-        self.kf_queue = []              # [(pano_bgr, scan_snapshot, pose)] 长度<=1
+        self.kf_queue = []
         self.kf_lock = threading.Lock()
 
-        # 模块
+
         self.proj = PanoProjector(self.cfg['projection'])
         self.gm = GridMap(self.cfg['mapping']['grid_res_m'])
         self.smap = SemanticMap({**self.cfg['mapping'],
@@ -101,7 +98,7 @@ class SmartVLM(Node):
         self.llm = LLMClient(self.cfg['llm'], self.get_logger())
         self.parser = QuestionParser(self.llm, self.get_logger())
         self.answerer = Answerer(self.smap, self.gm, self.llm, self.get_logger())
-        self.detector = None            # 延迟加载(BOOT 线程)
+        self.detector = None
 
         self.t_question = None
         self.answered = False
@@ -109,7 +106,7 @@ class SmartVLM(Node):
         threading.Thread(target=self.mission_thread, daemon=True).start()
         threading.Thread(target=self.perception_thread, daemon=True).start()
 
-    # ================= 回调 =================
+
     def on_question(self, msg):
         if self.question is None:
             self.question = msg.data
@@ -123,8 +120,8 @@ class SmartVLM(Node):
         self.pose_buf.push(stamp_to_sec(msg.header.stamp), pose)
 
     def on_scan(self, msg):
-        # SLAM 未就绪时的点云可能配准到千米外的错误位置,喂进 GridMap 会
-        # 触发巨型栅格分配吃爆内存(2026-07-08 事故)→ 无位姿丢帧 + 距离过滤
+
+
         if self.pose is None:
             return
         xyz, _ = pc2_to_xyz_intensity(msg)
@@ -151,10 +148,10 @@ class SmartVLM(Node):
         image_t = stamp_to_sec(msg.header.stamp)
         pose = self.pose_buf.query(image_t)
         if pose is None:
-            return                      # 无时间同步位姿 → 丢帧(报告 §7.1)
+            return
         scan = self.scan_history.query(image_t)
         if scan is None:
-            # 仍保留图像供直接 VLM 计数；绝不能拿“当前”点云去投影 7 秒前图像。
+
             scan = np.zeros((0, 3))
         due, xy, yaw = keyframe_due(pose, self.last_kf_xy, self.last_kf_yaw,
                                     self.cfg['perception']['keyframe_trans_m'],
@@ -165,7 +162,7 @@ class SmartVLM(Node):
         with self.kf_lock:
             self.kf_queue = [(img_to_bgr(msg), scan.copy(), pose)]
 
-    # ================= 感知线程 =================
+
     def perception_thread(self):
         while rclpy.ok():
             with self.kf_lock:
@@ -184,7 +181,7 @@ class SmartVLM(Node):
             except Exception:
                 self.get_logger().error(traceback.format_exc())
 
-    # ================= 任务状态机 =================
+
     def mission_thread(self):
         try:
             # BOOT
@@ -200,7 +197,7 @@ class SmartVLM(Node):
             watchdog.daemon = True
             watchdog.start()
 
-            # PARSE(超时 → 正则回退,报告 §11)
+
             parsed = self._with_deadline(
                 lambda: self.parser.parse(self.question), T['parse_deadline'])
             if parsed is None:
@@ -220,12 +217,12 @@ class SmartVLM(Node):
                    'object_reference': 'explore_deadline_objref',
                    'instruction_following': 'explore_deadline_instr'}[qtype]
             self.explore_until(deadline(key), parsed, qtype)
-            # 诊断:探索结束后打印物体库(map 系),便于离线核对 grounding
+
             self.get_logger().info(
                 'MAP after explore:\n'
                 + self.smap.scene_text(parsed.get('target_nouns')))
 
-            # ANSWER / EXECUTE(计算超时 → 工具箱兜底,报告 §11)
+
             if qtype == 'numerical':
                 n = self._with_deadline(
                     lambda: self.answerer.answer_numerical(self.question, parsed),
@@ -244,7 +241,7 @@ class SmartVLM(Node):
                     obj = objs[0] if objs else None
                 if obj:
                     self.publish_marker(obj)
-                    self.goto((obj.center[0], obj.center[1]))  # 展示性航点
+                    self.goto((obj.center[0], obj.center[1]))
             else:
                 plan = self._with_deadline(
                     lambda: self.answerer.plan_instruction(
@@ -262,7 +259,7 @@ class SmartVLM(Node):
                 penalty_zones = plan[1] if plan else []
                 final_start_idx = plan[2] if plan and len(plan) > 2 else None
                 final_alternatives = plan[3] if plan and len(plan) > 3 else []
-                if not wps:               # 规划失败 → 尝试最后一个目标(找不到就不硬冲)
+                if not wps:
                     cons = [c for c in parsed.get('constraints', [])
                             if c.get('action') in ('goto', 'stop_at', 'pass_near')]
                     if cons:
@@ -305,7 +302,7 @@ class SmartVLM(Node):
 
     @staticmethod
     def _with_deadline(fn, timeout):
-        """在工作线程里跑 fn,超时返回 None(fn 继续在后台,结果被丢弃)。"""
+
         box = {}
 
         def run():
@@ -321,11 +318,11 @@ class SmartVLM(Node):
             raise RuntimeError(box['err'])
         return box.get('out')
 
-    # ---------- 探索循环 ----------
+
     def explore_until(self, t_end, parsed, qtype):
         cfg = self.cfg['exploration']
-        # 360° 相机已覆盖全部水平朝向。旧四向平移扫描在新增场景中每题
-        # 稳定制造约三次 8s timeout；默认直接交给 frontier 探索。
+
+
         if self.pose:
             initial = bootstrap_waypoints(self.pose[:2], cfg)
             if not initial:
@@ -341,7 +338,7 @@ class SmartVLM(Node):
             if goal is None:
                 self.get_logger().info('No frontier left')
                 return
-            # 沿 A* 路径按 waypoint_step_m 步进(系统会避障,小步长防绕远)
+
             path = self.gm.astar(np.array(self.pose[:2]), goal)
             wps = decimate(path, cfg['waypoint_step_m']) if path else [tuple(goal)]
             reached = True
@@ -364,11 +361,8 @@ class SmartVLM(Node):
         return all(self.smap.by_label(n.split()[-1]) for n in nouns)
 
     def _early_stop_ok(self, parsed, qtype):
-        """指令题无关系最终目标可早停；带空间关系的最终目标
-        一律继续探索到 frontier 耗尽或 explore_deadline_instr。
 
-        2026-07-10 q5 实测中，真柜仅观测 2 次时，近处误检柜已满足
-        ``picture above`` 而早停，导致整题选错。can_ground 不调 LLM。"""
+
         if qtype == 'instruction_following':
             finals = [c for c in parsed.get('constraints', [])
                       if c.get('action') in ('goto', 'stop_at', 'pass_near')]
@@ -379,8 +373,8 @@ class SmartVLM(Node):
                 return self.answerer.can_ground(
                     last.get('target', ''), parsed, last)
         if qtype == 'object_reference':
-            # 不能“看见任一目标同类”就结束。必须同时看见题目中的关系锚点，
-            # 否则 Arabic q2/q3 会在 45s 选中第一只枕头/灯而非唯一关系目标。
+
+
             required = list(parsed.get('target_nouns') or [])
             for con in parsed.get('constraints', []):
                 required += list(con.get('anchors') or [])
@@ -394,7 +388,7 @@ class SmartVLM(Node):
             return self.answerer.can_ground(target, parsed, relevant)
         return self.targets_found(parsed)
 
-    # ---------- 运动原语 ----------
+
     def goto(self, xy, timeout=25, stuck_check=False, reach=None):
         msg = Pose2D()
         msg.x, msg.y, msg.theta = float(xy[0]), float(xy[1]), 0.0
@@ -439,8 +433,8 @@ class SmartVLM(Node):
                         'moved': float(np.linalg.norm(p - start_p)),
                         'remaining': dist, 'improvement': improvement}
                     return False
-                # 用窗口内最佳距离作为下一窗口基准；绕障时允许短暂远离，
-                # 但每个窗口最终必须取得明确的净进展。
+
+
                 progress_ref_dist = min(progress_ref_dist, dist)
                 progress_t = time.time()
             elif (stuck_check and not cfg.get('goal_progress_enabled', False)
@@ -467,7 +461,7 @@ class SmartVLM(Node):
         return False
 
     def _follow_final_path(self, wps, deadline, reach):
-        """在同一个末段总时间预算内执行密集航点，失败即返回。"""
+
         per_wp = self.cfg['timing']['waypoint_timeout_s']
         for idx, wp in enumerate(wps):
             remaining = deadline - time.time()
@@ -492,11 +486,8 @@ class SmartVLM(Node):
         return True
 
     def _failure_penalty(self):
-        """把本次失败方向写成短期软禁行走廊，供下一次 A* 绕开。
 
-        只标记机器人前方最多 0.8m，而不是封死整条全局路径；该区域仅存在于
-        当前 ``follow_waypoints`` 调用中，不污染地图或后续题目。
-        """
+
         wp = getattr(self, '_last_failed_wp', None)
         if wp is None:
             return None
@@ -524,7 +515,7 @@ class SmartVLM(Node):
 
     def follow_waypoints(self, wps, t_abort, penalty_zones=None,
                          final_start_idx=None, final_alternatives=None):
-        """执行航点；仅最终目标附近使用小到达阈值与单次重规划。"""
+
         if not wps:
             return False
         cfg = self.cfg['exploration']
@@ -549,9 +540,8 @@ class SmartVLM(Node):
         max_replans = max(base_replans, alternate_replans)
         dynamic_zones = list(penalty_zones or [])
         final_deadline = None
-        # mission_thread 传入规划器标注的最终约束边界；旧调用者
-        # 没有 metadata 时宁可只对最后一点启用重规划，不猜测几何后缀
-        # 而误跳过 pass_between 等前序约束。
+
+
         final_start = (len(wps) - 1 if final_start_idx is None else
                        max(0, min(int(final_start_idx), len(wps) - 1)))
 
@@ -581,8 +571,7 @@ class SmartVLM(Node):
 
             self._remember_failure(dynamic_zones)
 
-            # 最终区域首次失败：新地形已在行进中更新，从当前位姿
-            # 重跑 A*。禁行区代价必须保留，且重试次数有硬上限。
+
             for attempt in range(1, max_replans + 1):
                 if time.time() >= final_deadline:
                     break
@@ -626,7 +615,7 @@ class SmartVLM(Node):
             f'FINAL APPROACH done reached={reached} dist={dist:.2f}m')
         return reached
 
-    # ---------- 发布 ----------
+
     def publish_num(self, n):
         m = Int32()
         m.data = int(n)
@@ -649,12 +638,12 @@ class SmartVLM(Node):
         self.pub_marker.publish(mk)
         self.get_logger().info(f'ANSWER marker: {obj.brief()}')
 
-    # ---------- 硬截止兜底(报告 §11)----------
+
     def force_answer(self):
         if self.answered:
             return
         self.answered = True
-        self.get_logger().warn('HARD DEADLINE — emitting best-effort answer')
+        self.get_logger().warn('HARD DEADLINE - emitting best-effort answer')
         try:
             parsed = getattr(self, 'parsed', None) or \
                 self.parser._regex_fallback(self.question or 'go')

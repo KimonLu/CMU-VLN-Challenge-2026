@@ -1,4 +1,4 @@
-# AI Module — smart_vlm
+# AI Module - smart_vlm
 
 Zero-training pipeline for the CMU VLN Challenge 2026: open-vocabulary
 detection (YOLO-World, CPU-capable) + LiDAR depth fusion into an object-level
@@ -28,6 +28,13 @@ docker pull kimon0810/iros2026_ai_module@sha256:499c717a0812c8c0348fb64ca18b786e
 `latest` currently resolves to the same digest. The published platform is
 `linux/amd64`; CUDA inference was validated with an NVIDIA GPU.
 
+## Dependencies
+
+The submission-level Python dependency manifest is `ai_module/requirements.txt`.
+It includes the pinned PyTorch, torchvision, YOLO-World, OpenAI client, image
+processing, numerical, and CLIP dependencies used by the Docker image. ROS 2
+Jazzy is provided by the official challenge base image.
+
 ## Run
 
 ```bash
@@ -44,7 +51,7 @@ API keys and all tunables live in `ai_module/src/smart_vlm/config/params.yaml`.
 
 ## Layout
 
-- `src/smart_vlm/` — ROS 2 ament_python package (see its README for the
-  module map); `src/smart_vlm/tests/` — 144 pytest cases, runnable without ROS
-- `src/dummy_vlm/` — original dummy model, kept for reference/fallback
-- `tools/` — development-only calibration and regression-evaluation scripts
+- `src/smart_vlm/` - ROS 2 ament_python package (see its README for the
+  module map); `src/smart_vlm/tests/` - 144 pytest cases, runnable without ROS
+- `src/dummy_vlm/` - original dummy model, kept for reference/fallback
+- `tools/` - development-only calibration and regression-evaluation scripts

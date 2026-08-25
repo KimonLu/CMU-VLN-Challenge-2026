@@ -1,4 +1,5 @@
-"""空间关系工具箱(报告 §8)。确定性几何,输入 MapObject 列表。"""
+"""Deterministic spatial-relation utilities for mapped objects."""
+
 import numpy as np
 
 
@@ -53,8 +54,8 @@ def below(a, b, min_gap=0.2):
 
 
 def apply_relation(relation, cands, anchors):
-    """统一入口:LLM 解析出的 relation 串 → 过滤/排序候选。
-    cands/anchors: MapObject 列表。返回过滤后的 cands。"""
+
+
     if not cands:
         return []
     if relation in ('none', None, ''):
@@ -67,7 +68,7 @@ def apply_relation(relation, cands, anchors):
         return [c for c in cands if any(near(c, a) for a in anchors)]
     if relation == 'between' and len(anchors) >= 2:
         r = [c for c in cands if between(c, anchors[0], anchors[1])]
-        return r or cands          # between 失配时不清空,交给 LLM 仲裁
+        return r or cands
     if relation == 'on' and anchors:
         return [c for c in cands if any(on_top(c, a) for a in anchors)]
     if relation == 'above' and anchors:
@@ -80,7 +81,7 @@ def apply_relation(relation, cands, anchors):
 
 
 def relation_table(cands, anchors):
-    """给 LLM 仲裁用的数值表(报告 §9.3)。"""
+
     lines = []
     for c in cands:
         for a in anchors:

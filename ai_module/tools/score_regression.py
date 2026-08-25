@@ -1,15 +1,8 @@
 #!/usr/bin/env python3
-"""离线回归打分:tools/out/*.json(run_one_question 产出)→ results.csv。
+"""Offline proxy scoring for headless regression outputs."""
 
-无 ROS 依赖,本机 venv 可跑:
-  python3 tools/score_regression.py --results tools/out --questions questions
 
-打分口径(近似,非官方):
-  numerical  : 与 answer_key.yaml 精确匹配 → 1/0
-  instruction: 轨迹 vs trajectory_q4/q5.ply 的离散 Fréchet + 终点距离,
-               score ≈ 6 × (0.5×exp(-frechet/3) + 0.5×exp(-endpoint/1.5))
-  objref     : 无机器真值 → 打印 marker 参数,与 questions.pdf 人工比对
-"""
+
 import argparse
 import csv
 import glob
@@ -88,11 +81,11 @@ def aabb_iou(center_a, size_a, center_b, size_b):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--results', default=os.path.join(
-        os.path.dirname(__file__), 'out'), help='run_one_question 输出目录')
+        os.path.dirname(__file__), 'out'), help='run_one_question output directory')
     ap.add_argument('--questions', default=os.path.join(
         os.path.dirname(__file__), '..', '..', 'questions'),
-        help='官方 questions/ 目录')
-    ap.add_argument('--out', default=None, help='results.csv 路径')
+        help='official questions directory')
+    ap.add_argument('--out', default=None, help='results.csv output path')
     args = ap.parse_args()
 
     key_path = os.path.join(os.path.dirname(__file__), 'answer_key.yaml')
@@ -132,23 +125,23 @@ def main():
                            answer=answer,
                            expected=f"{gt['label']} object_id={gt['object_id']}",
                            center_error_m=round(err, 3), iou_3d=round(iou, 4),
-                           notes=('3D AABB IoU 代理分,非官方口径; label=' +
+                            notes=('3D AABB IoU proxy score (unofficial); label=' +
                                   ('OK' if label_ok else 'MISMATCH')))
             else:
                 row.update(max_score=2, score=0, answer=answer,
-                           notes='无 Marker 或缺少开发集真值')
+                            notes='missing marker or development ground truth')
         else:
             traj = r.get('trajectory') or []
             gt = load_gt_trajectory(args.questions, scene, q)
             if gt is None or len(traj) < 2:
-                row.update(max_score=6, score=0, notes='轨迹缺失')
+                row.update(max_score=6, score=0, notes='trajectory missing')
             else:
-                xy = [(p[1], p[2]) for p in traj]        # [t,x,y] → (x,y)
+                xy = [(p[1], p[2]) for p in traj]        # [t,x,y] -> (x,y)
                 f = frechet_distance(xy, gt)
                 e = endpoint_distance(xy, gt)
                 row.update(frechet_m=round(f, 2), endpoint_m=round(e, 2),
                            max_score=6, score=round(score_instruction(f, e), 2),
-                           notes='近似分,非官方口径')
+                            notes='approximate score (unofficial)')
         rows.append(row)
 
     out = args.out or os.path.join(args.results, 'results.csv')
@@ -160,8 +153,9 @@ def main():
     total = sum(float(r['score']) for r in rows if r['score'] != '')
     maxsc = sum(float(r['max_score']) for r in rows
                 if r['max_score'] != '' and r['score'] != '')
-    print(f'{len(rows)} 条结果 → {out}')
-    print(f'可自动打分部分: {total:.1f} / {maxsc:.0f} (指代题需人工比对)')
+    print(f'{len(rows)} results -> {out}')
+    print(f'automatically scored subset: {total:.1f} / {maxsc:.0f} '
+          '(object-reference tasks require manual review)')
     for r in rows:
         print(f"  {r['scene']} q{r['q']} [{r['qtype'][:5]}] "
               f"score={r['score']} {r['notes']}")

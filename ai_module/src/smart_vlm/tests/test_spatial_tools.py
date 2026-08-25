@@ -18,19 +18,19 @@ def test_closest_farthest():
 def test_between():
     a, b = mk(0, (0, 0, 0)), mk(1, (4, 0, 0))
     assert st.between(mk(2, (2, 0.3, 0)), a, b)
-    assert not st.between(mk(3, (2, 2.0, 0)), a, b)      # 偏离走廊
-    assert not st.between(mk(4, (0.2, 0, 0)), a, b)      # 太靠端点
-    assert not st.between(mk(5, (2, 0, 0)), a, a)        # 重合锚点
+    assert not st.between(mk(3, (2, 2.0, 0)), a, b)
+    assert not st.between(mk(4, (0.2, 0, 0)), a, b)
+    assert not st.between(mk(5, (2, 0, 0)), a, a)
 
 
 def test_on_top_and_above():
-    table = mk(0, (0, 0, 0.4), size=(1.0, 1.0, 0.8))     # 顶面 0.8
-    cup = mk(1, (0.1, 0.1, 0.9), size=(0.1, 0.1, 0.2))   # 底面 0.8
+    table = mk(0, (0, 0, 0.4), size=(1.0, 1.0, 0.8))
+    cup = mk(1, (0.1, 0.1, 0.9), size=(0.1, 0.1, 0.2))
     high = mk(2, (0, 0, 2.0), size=(0.2, 0.2, 0.2))
     off = mk(3, (2.0, 0, 0.9), size=(0.1, 0.1, 0.2))
     assert st.on_top(cup, table)
-    assert not st.on_top(high, table)                    # 悬空不接触
-    assert not st.on_top(off, table)                     # 水平错位
+    assert not st.on_top(high, table)
+    assert not st.on_top(off, table)
     assert st.above(high, table)
     assert st.below(table, high)
 
