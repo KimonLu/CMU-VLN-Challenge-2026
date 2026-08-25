@@ -1,0 +1,8 @@
+numpy==1.26.4
+scipy==1.11.4
+opencv-python==4.11.0.86
+opencv-python-headless==4.11.0.86
+ultralytics==8.4.90
+ultralytics-thop==2.0.20
+openai==2.44.0
+PyYAML==6.0.1

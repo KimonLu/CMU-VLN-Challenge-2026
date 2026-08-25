@@ -1,0 +1,89 @@
+# 数值题(Q1)真值 — 由 15 个 questions/<scene>/questions.pdf 自动提取("Print N in terminal")
+# 指代题(Q2/Q3)真值是 bbox 图、指令题(Q4/Q5)真值是 trajectory_q4/q5.ply,不在此文件。
+# 用途:tools/score_regression.py 对照打分。
+numerical:
+  arabic_room: 2        # How many sofas are below a window?
+  chinese_room: 6       # Count the number of chairs with pillows on them.
+  home_building_1: 6    # How many pillows are on the sofa under the pictures?
+  home_building_2: 2    # How many red pillows are on the sofa?
+  hotel_room_1: 4       # How many pillows are on the bed?
+  hotel_room_2: 3       # How many pictures are above the bed?
+  japanese_room: 3      # How many calligraphy paintings are above the display ledge?
+  livingroom_1: 8       # How many chairs are near the table with a vase on it?
+  livingroom_2: 2       # How many cups are on the coffee table?
+  livingroom_3: 2       # How many photos are on the TV cabinet?
+  livingroom_4: 6       # How many pillows are on a sofa?
+  loft: 2               # How many black pillows are on the sofa?
+  office_1: 6           # How many computer monitors are on the table closest to the map wall decal?
+  office_2: 1           # How many potted plants are on a table?
+  studio: 3             # How many framed records are above the couch?
+
+# 指代题开发集 3D 真值。仅用于本地回归代理评分，不会被运行时节点读取。
+# center/size 来自官方场景 object_list.txt；axis-aligned IoU 是非官方近似口径。
+object_reference:
+  arabic_room:
+    2:
+      label: pillow
+      object_id: 73
+      center: [1.4910771349, -2.1159977764, 0.4153144658]
+      size: [0.4213996, 0.2159195, 0.3628704]
+    3:
+      label: wall lamp
+      object_id: 79
+      center: [-0.7872937179, -2.4028276940, 2.0763287544]
+      size: [0.19330305, 0.10135651, 0.44941962]
+  chinese_room:
+    2:
+      label: bowl
+      object_id: 91
+      center: [4.6389202988, -0.4604272312, 0.8167634010]
+      size: [0.16004038, 0.15915227, 0.0920288]
+    3:
+      label: pillow
+      object_id: 72
+      center: [-0.4234708063, -3.8109247573, 0.6173213720]
+      size: [0.4106838, 0.2057271, 0.34888157]
+  home_building_2:
+    2:
+      label: desk light
+      object_id: 12
+      center: [-4.8640499368, 8.3049519182, 1.0658460855]
+      size: [0.4267254, 0.42680264, 0.6562562]
+    3:
+      label: speaker
+      object_id: 122
+      center: [-2.5983817184, 0.2331604715, 1.0082000494]
+      size: [0.14890027, 0.10312669, 0.65640014]
+  office_2:
+    2:
+      label: computer monitor
+      object_id: 75
+      center: [3.7086620149, 3.0780026901, 1.1139993668]
+      size: [0.14031744, 0.5563221, 0.46908242]
+    3:
+      label: box
+      object_id: 36
+      center: [5.8878411058, 2.6165980714, 0.8984833956]
+      size: [0.28408194, 0.2038002, 0.14119858]
+  livingroom_1:
+    2:
+      label: vase
+      object_id: 23
+      center: [-2.3859679503, -7.1109902337, 0.9342402816]
+      size: [0.17695904, 0.17499065, 0.1804794]
+    3:
+      label: pillow
+      object_id: 34
+      center: [-2.0406465752, -1.0066348335, 0.6100993752]
+      size: [0.41987503, 0.62614584, 0.40575883]
+  home_building_1:
+    2:
+      label: clock
+      object_id: 185
+      center: [7.2627550571, -4.9124605496, 0.9976117611]
+      size: [0.18667555, 0.08191967, 0.20069289]
+    3:
+      label: bowl
+      object_id: 96
+      center: [-6.6868629933, -2.8081753510, 1.1895461082]
+      size: [0.2609148, 0.26249623, 0.11500001]

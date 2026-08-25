@@ -1,0 +1,118 @@
+# ============ smart_vlm 全部可调参数(报告 §10 / §11)============
+
+llm:
+  # 供应商链,按顺序 failover。评测时 key 必须真实有效(写死在此文件随仓库提交)。
+  # 安全提示:用低余额小号 key;比赛结束立即作废。
+  providers:
+    # 交大免费 API:仅校园网可达(校外须 VPN)。开发期放第一位省智谱额度;
+    # 评测机访问不到 → BOOT 自检自动标 DOWN 跳过,不影响提交。
+    # 注意:qwen3.6-27b 支持单请求多图;但为与智谱(单图)行为一致,代码统一走拼图单图。
+    # 提交前评估:此 key 绑定个人校园账号,仓库公开后校内他人可用,可视情况移除。
+    - name: sjtu
+      base_url: https://models.sjtu.edu.cn/api/v1
+      api_key: "REPLACE_WITH_DEDICATED_COMPETITION_KEY"
+      text_model: deepseek-chat        # DeepSeek V4 Flash,免费
+      vision_model: qwen3.6-27b        # 唯一多模态,免费,实测单图/多图均可
+      # 10 req/min 超限=请求挂起 ~58s(非 429),会被 timeout 判成假超时 → 主动限速
+      min_interval_s: 6.5
+    - name: zhipu
+      base_url: https://open.bigmodel.cn/api/paas/v4
+      api_key: "REPLACE_WITH_DEDICATED_COMPETITION_KEY"
+      text_model: glm-4-flash          # 免费
+      vision_model: glm-4v-flash       # 免费
+    - name: siliconflow
+      base_url: https://api.siliconflow.cn/v1
+      api_key: "REPLACE_WITH_DEDICATED_COMPETITION_KEY"
+      text_model: Qwen/Qwen2.5-7B-Instruct
+      vision_model: Qwen/Qwen2.5-VL-7B-Instruct
+    - name: gemini
+      base_url: https://generativelanguage.googleapis.com/v1beta/openai/
+      api_key: "REPLACE_WITH_DEDICATED_COMPETITION_KEY"
+      text_model: gemini-2.0-flash
+      vision_model: gemini-2.0-flash
+  timeout_s: 15
+  max_retries: 3
+  call_budget_per_question: 9
+  vision_max_side: 1024       # 2x2 视图蒙太奇保留约 512px/视图，小物体不被压扁
+  jpeg_quality: 90
+
+perception:
+  # 镜像内绝对路径(Dockerfile 预下载);本地开发时若不存在则回退为裸文件名(自动下载到 cwd)
+  model_gpu: /home/docker/ai_module/models/yolov8m-worldv2.pt
+  model_cpu: /home/docker/ai_module/models/yolov8s-worldv2.pt
+  conf_thresh: 0.12          # 开放词汇下阈值宜低,靠多次观测确认
+  iou_thresh: 0.50
+  image_size: 1280           # 公开队伍同设置；办公室小物体在 640 下整场漏检
+  max_detections: 50
+  keyframe_trans_m: 0.5
+  keyframe_rot_deg: 30
+  min_lidar_pts: 8
+  base_vocab: [sofa, chair, table, coffee table, dining table, bed, pillow, window,
+    door, picture, painting, TV, lamp, wall lamp, potted plant, vase, trash can,
+    fridge, refrigerator, nightstand, bedside table, bench, stool, bookshelf, book,
+    bowl, cup, kettle, clock, curtain, mirror, speaker, ottoman, suitcase, tray,
+    folding screen, column, figurine, sink, cabinet, counter, rug, towel, toilet,
+    shower, bathtub, desk, monitor, keyboard, laptop, plate, bottle, candle, flowers]
+
+mapping:
+  max_point_range_m: 40.0    # 离机器人超此距离的激光点视为垃圾丢弃(防内存事故)
+  merge_dist_m: 0.5
+  confirm_obs: 2
+  approx_min_lidar_pts: 1    # 少点反射先保留粗位置，后续多视角再收敛
+  approx_default_size_m: 0.3
+  context_crop_margin_ratio: 1.0
+  max_saved_views: 6
+  grid_res_m: 0.2
+  terrain_obstacle_intensity: 0.436  # 2026-07-09 live 标定(Otsu):0.15 太低把 57%
+                                     # 地形误标障碍收窄探索;真墙/家具另由 scan z 过滤兜底
+  obstacle_z_range: [0.10, 1.50]
+
+exploration:
+  waypoint_step_m: 2.5        # A* 路径抽稀成航点的间距
+  reach_dist_m: 1.0           # 航点到达判据
+  # 最终目标附近单独加密：q5 柜体前密集椅群会让 2.5m 粗航点
+  # 在局部规划器内超时。1.0m 航点必须搭配 <1.0m 的到达判据。
+  final_waypoint_step_m: 1.0
+  final_approach_radius_m: 3.0
+  final_reach_dist_m: 0.5
+  final_replan_attempts: 1
+  # legacy 位移阈值保留供兼容；新判据直接检查到 waypoint 的距离是否下降，
+  # 避免机器人横向漂移却被误认为“有进展”。
+  stuck_timeout_s: 15
+  stuck_min_move_m: 0.3
+  goal_progress_enabled: false  # 消融 A 回退：q5 1.88 < 基线 2.07
+  progress_timeout_s: 10
+  progress_min_delta_m: 0.15
+  failure_memory_enabled: false # 消融 B 开关；仅在 A 验证后开启
+  failure_memory_replan_attempts: 2
+  failure_penalty_width_m: 0.5
+  failure_penalty_cost: 25.0
+  # 360° 相机无需靠四向平移补齐视角；四个新增场景实测该动作每题稳定浪费
+  # 约 16–24s，并制造三次 timeout。保留开关仅供消融回退。
+  init_sweep_enabled: false
+  init_spin_radius_m: 1.5     # 起步转圈半径(须 > 到达判据,spin 用 0.4m 判据)
+  # 目标周围按 A* 路径长度与障碍余量选择停靠点，不再只取第一个 FREE cell。
+  approach_min_radius_m: 0.8
+  approach_preferred_radius_m: 1.2
+  approach_max_radius_m: 2.0
+  approach_min_clearance_m: 0.35
+  approach_replan_attempts: 2  # 当前停靠侧失败后最多尝试两个空间分离候选
+
+timing:   # 报告 §11,单位秒,从收到问题起算(启动到收题另有 ~25s)
+  parse_deadline: 15
+  explore_deadline_numerical: 390
+  explore_deadline_objref: 390
+  explore_deadline_instr: 300
+  answer_deadline: 60
+  hard_deadline: 570          # T+9.5min 强制出答案
+  waypoint_timeout_s: 25
+  final_approach_timeout_s: 70  # 整个末段共享预算，非每个航点 70s
+
+projection:
+  img_w: 1920
+  img_h: 640
+  vfov_deg: 120
+  # 2026-07-09 live 标定核验:叠加图人眼终审 + q4 终点 0.58m 实证 → false/false 正确
+  # (MI/EDGE 指标在 10 样本上分歧属噪声;el=False 让地板点正确落在图像下半部)
+  azimuth_flip: false
+  elevation_flip: false
